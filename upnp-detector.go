@@ -68,22 +68,23 @@ func main() {
 	//transp = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	url = "http://" + host + ":" + port + endpoint
 	client = &http.Client{}
+
 	for {
-		handleConnection(conn)
+		// read one UPnP packet
+		buf := make([]byte, maxDatagramSize)
+		n, addr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			fmt.Println("Could not read from UPD connection: " + err.Error())
+			continue
+		}
+		go handlePacket(buf[:n], addr)
 	}
 }
 
-func handleConnection(c *net.UDPConn) {
-	// read the UPnP headers
-	buf := make([]byte, maxDatagramSize)
-	n, addr, err := c.ReadFromUDP(buf)
-	if err != nil {
-		fmt.Println("Could not read from UPD connection: " + err.Error())
-		return
-	}
+func handlePacket(buf []byte, addr *net.UDPAddr) {
 
 	// serialize and discard the last two headers as they will be empty
-	headers := strings.Split(string(buf[:n]), "\r\n")
+	headers := strings.Split(string(buf), "\r\n")
 	upnp := upnpRequest{
 		SrcIP:   addr.IP.String(),
 		Headers: headers[:len(headers)-2]}
@@ -103,7 +104,6 @@ func handleConnection(c *net.UDPConn) {
 	//req.SetBasicAuth(username, password)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
-	//resp, err := client.Post(url, "application/json", bytes.NewBuffer(j))
 	if err != nil {
 		fmt.Println("Could not Post request: " + err.Error())
 		return
